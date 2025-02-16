@@ -1,0 +1,136 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS CodePipeline for Spring Boot backend with Docker deployment to EC2 (Admin IAM, No S3)
+
+Parameters:
+  GitHubOwner:
+    Type: String
+    Description: NUS-ISS-SUS-Team2
+  GitHubRepo:
+    Type: String
+    Description: securidine-backend
+  GitHubBranch:
+    Type: String
+    Default: main
+    Description: GitHub branch to track
+  GitHubOAuthToken:
+    Type: String
+    NoEcho: true
+    Description: GitHub OAuth token (stored in AWS Secrets Manager recommended)
+  ECRRepositoryName:
+    Type: String
+    Description: Name of the Amazon ECR repository
+  EC2InstanceId:
+    Type: String
+    Description: ID of the EC2 instance for deployment
+
+Resources:
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: "*"
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AdminAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: "*"
+                Resource: "*"
+
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SpringBootDockerBuild
+      Source:
+        Type: GITHUB
+        Location: !Sub "https://github.com/NUS-ISS-SUS-Team2/securidine-backend.git"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: "aws/codebuild/standard:5.0"
+        Type: LINUX_CONTAINER
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: ECR_REPOSITORY
+            Value: !Ref ECRRepositoryName
+      ServiceRole: !GetAtt CodePipelineRole.Arn
+      Artifacts:
+        Type: NO_ARTIFACTS
+      TimeoutInMinutes: 15
+
+  CodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: SpringBootDockerPipeline
+      RoleArn: !GetAtt CodePipelineRole.Arn
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: GitHubSource
+              ActionTypeId:
+                Category: Source
+                Owner: ThirdParty
+                Provider: GitHub
+                Version: 1
+              Configuration:
+                Owner: !Ref GitHubOwner
+                Repo: !Ref GitHubRepo
+                Branch: !Ref GitHubBranch
+                OAuthToken: !Ref GitHubOAuthToken
+              OutputArtifacts:
+                - Name: SourceOutput
+
+        - Name: Build
+          Actions:
+            - Name: BuildDockerImage
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              InputArtifacts:
+                - Name: SourceOutput
+              Configuration:
+                ProjectName: !Ref CodeBuildProject
+              OutputArtifacts:
+                - Name: BuildOutput
+
+        - Name: Deploy
+          Actions:
+            - Name: DeployToEC2
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CodeDeploy
+                Version: 1
+              Configuration:
+                ApplicationName: SpringBootApp
+                DeploymentGroupName: SpringBootDeploymentGroup
+              InputArtifacts:
+                - Name: BuildOutput
+
+  CodeDeployApplication:
+    Type: AWS::CodeDeploy::Application
+    Properties:
+      ApplicationName: SpringBootApp
+
+  CodeDeployDeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Properties:
+      ApplicationName: !Ref CodeDeployApplication
+      DeploymentGroupName: SpringBootDeploymentGroup
+      ServiceRoleArn: !GetAtt CodePipelineRole.Arn
+      Ec2TagFilters:
+        - Key: Name
+          Value: SpringBootServer
+          Type: KEY_AND_VALUE
+
+Outputs:
+  PipelineName:
+    Description: Name of the AWS CodePipeline
+    Value: !Ref CodePipeline
