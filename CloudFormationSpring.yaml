@@ -21,9 +21,15 @@ Parameters:
     Description: Name of the Amazon ECR repository
   EC2InstanceId:
     Type: String
+    Default: springboot-backend
     Description: ID of the EC2 instance for deployment
 
 Resources:
+  ECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref ECRRepositoryName
+
   CodePipelineRole:
     Type: AWS::IAM::Role
     Properties:
@@ -49,7 +55,7 @@ Resources:
       Name: SpringBootDockerBuild
       Source:
         Type: GITHUB
-        Location: !Sub "https://github.com/NUS-ISS-SUS-Team2/securidine-backend.git"
+        Location: !Sub "https://github.com/${GitHubOwner}/${GitHubRepo}.git"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: "aws/codebuild/standard:5.0"
@@ -57,7 +63,7 @@ Resources:
         PrivilegedMode: true
         EnvironmentVariables:
           - Name: ECR_REPOSITORY
-            Value: !Ref ECRRepositoryName
+            Value: !Ref ECRRepository
       ServiceRole: !GetAtt CodePipelineRole.Arn
       Artifacts:
         Type: NO_ARTIFACTS
@@ -81,7 +87,7 @@ Resources:
                 Owner: !Ref GitHubOwner
                 Repo: !Ref GitHubRepo
                 Branch: !Ref GitHubBranch
-                OAuthToken: !Ref GitHubOAuthToken
+                OAuthToken: !Sub "{{resolve:secretsmanager:${GitHubSecretName}:SecretString:GitHubOAuthToken}}"
               OutputArtifacts:
                 - Name: SourceOutput
 
