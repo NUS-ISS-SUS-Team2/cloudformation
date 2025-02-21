@@ -1,27 +1,26 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: AWS CodePipeline for Spring Boot backend with Docker deployment to EC2 (Admin IAM, No S3)
+Description: AWSCodePipelineSpringBoot backend with Docker deployment to EC2 (Admin IAM, No S3)
 
 Parameters:
   GitHubOwner:
     Type: String
+    Default: NUS-ISS-SUS-Team2
     Description: NUS-ISS-SUS-Team2
   GitHubRepo:
     Type: String
+    Default: securidine-backend
     Description: securidine-backend
   GitHubBranch:
     Type: String
     Default: main
     Description: GitHub branch to track
-  GitHubOAuthToken:
-    Type: String
-    NoEcho: true
-    Description: GitHub OAuth token (stored in AWS Secrets Manager recommended)
   ECRRepositoryName:
     Type: String
-    Description: Name of the Amazon ECR repository
+    Default: nus-iss-sus-team2/securidine
+    Description: Name of the Amazon ECR repository [nus-iss-sus-team2/securidine]
   EC2InstanceId:
     Type: String
-    Default: springboot-backend
+    Default: Copy running EC2 instance ID here [i-0bf160e6f0ad23308]
     Description: ID of the EC2 instance for deployment
 
 Resources:
@@ -29,6 +28,13 @@ Resources:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: !Ref ECRRepositoryName
+
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: securidines3bucket
+      VersioningConfiguration:
+        Status: Enabled
 
   CodePipelineRole:
     Type: AWS::IAM::Role
@@ -74,6 +80,9 @@ Resources:
     Properties:
       Name: SpringBootDockerPipeline
       RoleArn: !GetAtt CodePipelineRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactBucket
       Stages:
         - Name: Source
           Actions:
@@ -87,9 +96,9 @@ Resources:
                 Owner: !Ref GitHubOwner
                 Repo: !Ref GitHubRepo
                 Branch: !Ref GitHubBranch
-                OAuthToken: !Sub "{{resolve:secretsmanager:${GitHubSecretName}:SecretString:GitHubOAuthToken}}"
+                OAuthToken: !Sub "{{resolve:secretsmanager:GitHubTokenBZ:SecretString}}"
               OutputArtifacts:
-                - Name: SourceOutput
+                - Name: SourceArtifact
 
         - Name: Build
           Actions:
@@ -100,7 +109,7 @@ Resources:
                 Provider: CodeBuild
                 Version: 1
               InputArtifacts:
-                - Name: SourceOutput
+                - Name: SourceArtifact
               Configuration:
                 ProjectName: !Ref CodeBuildProject
               OutputArtifacts:
