@@ -62,14 +62,19 @@ Resources:
       Source:
         Type: GITHUB
         Location: !Sub "https://github.com/${GitHubOwner}/${GitHubRepo}.git"
+        BuildSpec: Order-Service/buildspec.yml
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: "aws/codebuild/standard:5.0"
+        Image: "aws/codebuild/amazonlinux2-x86_64-standard:4.0"
         Type: LINUX_CONTAINER
         PrivilegedMode: true
         EnvironmentVariables:
-          - Name: ECR_REPOSITORY
-            Value: !Ref ECRRepository
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: REPOSITORY_URI
+            Value: !Sub "${ECRRepository.RepositoryUri}"
+          - Name: JAVA_HOME
+            Value: "/usr/lib/jvm/java-17-openjdk"
       ServiceRole: !GetAtt CodePipelineRole.Arn
       Artifacts:
         Type: NO_ARTIFACTS
@@ -96,7 +101,7 @@ Resources:
                 Owner: !Ref GitHubOwner
                 Repo: !Ref GitHubRepo
                 Branch: !Ref GitHubBranch
-                OAuthToken: !Sub "{{resolve:secretsmanager:GitHubTokenBZ:SecretString}}"
+                OAuthToken: !Sub "{{resolve:secretsmanager:GitHubTokenBZ:SecretString:GitHubOAuthToken}}"
               OutputArtifacts:
                 - Name: SourceArtifact
 
