@@ -18,12 +18,110 @@ Parameters:
     Type: String
     Default: nus-iss-sus-team2/securidine
     Description: Name of the Amazon ECR repository [nus-iss-sus-team2/securidine]
-  EC2InstanceId:
+  InstanceType:
+    Description: "EC2 instance type"
     Type: String
-    Default: Copy running EC2 instance ID here [i-0bf160e6f0ad23308]
-    Description: ID of the EC2 instance for deployment
+    Default: "t2.micro"
+  KeyName:
+    Description: "EC2 KeyPair for SSH access"
+    Type: AWS::EC2::KeyPair::KeyName
+  VPC:
+    Description: "VPC ID where the instance will be deployed"
+    Type: AWS::EC2::VPC::Id
+  Subnet:
+    Description: "Subnet ID for EC2 instance"
+    Type: AWS::EC2::Subnet::Id
 
 Resources:
+  EC2Instance:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      ImageId: "ami-0995922d49dc9a17d"  # Replace with latest Amazon Linux 2 AMI ID
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          SubnetId: !Ref Subnet
+          GroupSet:
+            - !Ref EC2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: "Order Microservice"
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          exec > /var/log/user-data.log 2>&1
+
+          echo "Updating packages..."
+          yum update -y
+
+          echo "Installing dependencies..."
+          yum install -y docker
+          yum install -y ruby wget
+
+
+          echo "Starting and enabling Docker..."
+          systemctl start docker
+          systemctl enable docker
+          usermod -aG docker ec2-user
+
+          echo "Installing AWS CodeDeploy agent..."
+          cd /home/ec2-user
+          wget https://aws-codedeploy-${AWS::Region}.s3.amazonaws.com/latest/install
+          chmod +x ./install
+          ./install auto
+
+          echo "Enabling and starting CodeDeploy agent..."
+          systemctl enable codedeploy-agent
+          systemctl start codedeploy-agent
+
+          echo "Verifying Docker and CodeDeploy installations..."
+          docker --version || exit 1
+          systemctl status codedeploy-agent || exit 1
+
+          echo "User Data script completed."
+
+  EC2SecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: "Allow inbound access"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+
+  EC2InstanceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action: ["sts:AssumeRole"]
+      Policies:
+        - PolicyName: AdminAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: "*"
+                Resource: "*"
+
+  EC2InstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Roles:
+        - !Ref EC2InstanceRole
   ECRRepository:
     Type: AWS::ECR::Repository
     Properties:
@@ -147,8 +245,12 @@ Resources:
       ServiceRoleArn: !GetAtt CodePipelineRole.Arn
       Ec2TagFilters:
         - Key: Name
-          Value: SpringBootServer
+          Value: Order Microservice
           Type: KEY_AND_VALUE
+      AutoRollbackConfiguration:
+        Enabled: true
+        Events:
+          - DEPLOYMENT_FAILURE
 
 Outputs:
   PipelineName:
