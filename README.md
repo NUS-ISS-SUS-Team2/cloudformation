@@ -5,13 +5,13 @@ This template pulls Springboot backend app from Github and deploys it to an EC2 
 
 Prequisites needed:
   Parameters:
-    - Description: (Name of the cloudformation)
-    - github repo and branch
-    - ECR repository name (I named it same as Github's)
+  - Description: (Name of the cloudformation)
+  - github repo and branch
+  - ECR repository name (I named it same as Github's)
     Below 3 params AWS will provide a drop down to current AWS resources:
-    - EC2 Keypair generated and in AWS console (via EC2)
-    - VPC created (ID)
-    - Subnet ID
+  - EC2 Keypair generated and in AWS console (via EC2)
+  - VPC created (ID)
+  - Subnet ID
 
 Current template will spin up:
  - One EC2 instance (script to install docker and codedeploy for this EC2 within this template as well)
