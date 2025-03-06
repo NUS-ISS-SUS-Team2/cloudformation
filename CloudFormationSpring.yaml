@@ -162,12 +162,6 @@ Resources:
       TargetType: instance
       Targets:
         - Id: !Ref OrderServiceEC2Instance
-
-  SSLCertificate:
-    Type: AWS::CertificateManager::Certificate
-    Properties:
-      DomainName: "nusiss-sus-project.online"  # Replace with your domain
-      ValidationMethod: DNS  # Use DNS validation for ACM certificate     
         
   OrderServiceApi:
     Type: AWS::ApiGateway::RestApi
