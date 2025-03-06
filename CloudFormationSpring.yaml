@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: AWSCodePipelineSpringBoot backend with Docker deployment to EC2 (Admin IAM, No S3)
+Description: AWSCodePipelineDeployApiGatewaySpringBoot backend with Docker deployment to EC2 (Admin IAM, No S3)
 
 Parameters:
   GitHubOwner:
@@ -22,6 +22,9 @@ Parameters:
     Description: "EC2 instance type"
     Type: String
     Default: "t2.micro"
+  SSLCertificateArn:
+    Type: String
+    Description: "Copy the ARN of the existing ACM certificate for HTTPS [arn:aws:acm:ap-southeast-1:302125150179:certificate/827f2781-1eac-43e0-9162-ff9585564255]"
   KeyName:
     Description: "EC2 KeyPair for SSH access"
     Type: AWS::EC2::KeyPair::KeyName
@@ -31,9 +34,12 @@ Parameters:
   Subnet:
     Description: "Subnet ID for EC2 instance"
     Type: AWS::EC2::Subnet::Id
+  SubnetALB:
+    Description: "Second Subnet IDs for ALB (Requires more than one - Choose a different one)"
+    Type: AWS::EC2::Subnet::Id
 
 Resources:
-  EC2Instance:
+  OrderServiceEC2Instance:
     Type: "AWS::EC2::Instance"
     Properties:
       InstanceType: !Ref InstanceType
@@ -122,6 +128,85 @@ Resources:
     Properties:
       Roles:
         - !Ref EC2InstanceRole
+        
+  OrderServiceALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: "OrderServiceALB"
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !Ref Subnet 
+        - !Ref SubnetALB
+      SecurityGroups:
+        - !Ref EC2SecurityGroup
+
+  OrderServiceALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref OrderServiceALB
+      Protocol: HTTPS
+      Port: 443
+      Certificates:
+        - CertificateArn: !Ref SSLCertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref OrderServiceTargetGroup
+
+  OrderServiceTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VPC
+      Port: 8080
+      Protocol: HTTP
+      TargetType: instance
+      Targets:
+        - Id: !Ref OrderServiceEC2Instance
+
+  SSLCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: "nusiss-sus-project.online"  # Replace with your domain
+      ValidationMethod: DNS  # Use DNS validation for ACM certificate     
+        
+  OrderServiceApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: "OrderServiceAPI"
+      Description: "API for Order Service"
+  
+  OrderResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref OrderServiceApi
+      ParentId: !GetAtt OrderServiceApi.RootResourceId
+      PathPart: "orders"
+
+  GetOrdersMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref OrderServiceApi
+      ResourceId: !Ref OrderResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: HTTP
+        IntegrationHttpMethod: GET
+        Uri: !Join ["", ["https://", !GetAtt OrderServiceALB.DNSName, "/orders"]]
+        IntegrationResponses:
+          - StatusCode: "200"
+      MethodResponses:
+        - StatusCode: "200"
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: 
+      - GetOrdersMethod
+    Properties:
+      RestApiId: !Ref OrderServiceApi
+      StageName: prod      
+        
+        
   ECRRepository:
     Type: AWS::ECR::Repository
     Properties:

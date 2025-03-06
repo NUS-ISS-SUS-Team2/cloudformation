@@ -1,0 +1,35 @@
+
+Resources:
+  MyRDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: "securidine-backend-db"
+      Engine: "mysql"  # Change to "postgres" if using PostgreSQL
+      MasterUsername: "admin"
+      MasterUserPassword: "YourSecurePassword123"  # Replace with Secrets Manager for security
+      DBInstanceClass: "db.t3.micro"  # Free-tier eligible
+      AllocatedStorage: 20  # Minimum storage (20GB)
+      PubliclyAccessible: false  # Change to true if you need external access
+      MultiAZ: false  # Single AZ for cost savings
+      StorageType: "gp2"
+      DBName: "ordersdb"
+      VPCSecurityGroups:
+        - !Ref MyDBSecurityGroup
+      DBSubnetGroupName: !Ref MyDBSubnetGroup
+MyDBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Allow MySQL access from EC2"
+      VpcId: !Ref MyVPC  # Reference your existing VPC
+      SecurityGroupIngress:
+        - IpProtocol: "tcp"
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: "0.0.0.0/0"  # Change to your EC2 security group CIDR for better security
+MyDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: "DB Subnet Group"
+      SubnetIds:
+        - !Ref Subnet1  # Reference your existing subnets
+        - !Ref Subnet2
