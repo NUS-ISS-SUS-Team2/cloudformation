@@ -1,4 +1,19 @@
 
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "RdsDbCloudFormation Create an RDS instance using existing VPC, Security Group, and Subnet Group"
+
+Parameters:
+  MyVPC:
+    Description: "VPC ID where the RDS instance will be deployed"
+    Type: AWS::EC2::VPC::Id
+  Subnet1:
+    Description: "Subnet ID for DB instance"
+    Type: AWS::EC2::Subnet::Id
+    
+  Subnet2:
+    Description: "Choose another different subnet ID for DB instance"
+    Type: AWS::EC2::Subnet::Id
+    
 Resources:
   MyRDSInstance:
     Type: AWS::RDS::DBInstance
@@ -12,11 +27,11 @@ Resources:
       PubliclyAccessible: false  # Change to true if you need external access
       MultiAZ: false  # Single AZ for cost savings
       StorageType: "gp2"
-      DBName: "ordersdb"
+      DBName: "securidinedb"
       VPCSecurityGroups:
         - !Ref MyDBSecurityGroup
       DBSubnetGroupName: !Ref MyDBSubnetGroup
-MyDBSecurityGroup:
+  MyDBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: "Allow MySQL access from EC2"
@@ -26,10 +41,15 @@ MyDBSecurityGroup:
           FromPort: 3306
           ToPort: 3306
           CidrIp: "0.0.0.0/0"  # Change to your EC2 security group CIDR for better security
-MyDBSubnetGroup:
+  MyDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: "DB Subnet Group"
       SubnetIds:
         - !Ref Subnet1  # Reference your existing subnets
         - !Ref Subnet2
+        
+Outputs:
+  DBInstanceEndpoint:
+    Description: "The connection endpoint for the RDS instance"
+    Value: !GetAtt MyDBInstance.Endpoint.Address
