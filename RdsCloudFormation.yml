@@ -31,6 +31,8 @@ Resources:
       VPCSecurityGroups:
         - !Ref MyDBSecurityGroup
       DBSubnetGroupName: !Ref MyDBSubnetGroup
+      DeletionProtection: false   # Ensure deletion is allowed
+      SkipFinalSnapshot: true     # Prevents a final snapshot (avoiding storage costs)
   MyDBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
