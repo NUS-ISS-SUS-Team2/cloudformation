@@ -8,7 +8,7 @@ Using CloudFormation, there is an ability to instantly spin up all necessary AWS
 CloudFormationSpring.yaml
 
 Prequisites needed:
-  Parameters:
+- Parameters:
   - Description: (Name of the cloudformation)
   - github repo and branch
   - ECR repository name (I named it same as Github's)
@@ -18,10 +18,10 @@ Prequisites needed:
     - Subnet ID
 
 Current template will spin up:
- - One EC2 instance (script to install docker and codedeploy for this EC2 within this template as well)
+ - One EC2 instance (script to install docker, codedeploy & mysql for this EC2 within this template as well)
  - One ECR Repo (as i understand to act as what dockerhub does)
  - Codepipeline pipeline (Current pipeline trigger is still manual, through AWS console triggering the full pipeline on release change)
- - Codebuild to get from Github source (need generate a oauthtoken to allow the pull), build the dockerfile into a dockerized container     and push to ECR. (buildspec.yml within project root)
+ - Codebuild to get from Github source (need generate a oauthtoken to allow the pull), build the dockerfile into a dockerized container and push to ECR. (buildspec.yml within project root)
  - Codedeploy deployment (appspec.yml within the project) to run scripts in /scripts to stop/start the docker container in the EC2
 
 
