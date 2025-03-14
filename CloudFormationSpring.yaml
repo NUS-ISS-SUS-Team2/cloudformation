@@ -195,7 +195,7 @@ Resources:
       Integration:
         Type: HTTP
         IntegrationHttpMethod: GET
-        Uri: !Join ["", ["https://", !GetAtt OrderServiceALB.DNSName, "/orders"]]
+        Uri: !Join ["", ["https://", !GetAtt OrderServiceALB.DNSName, "/order/getAllOrders"]]
         IntegrationResponses:
           - StatusCode: "200"
       MethodResponses:
