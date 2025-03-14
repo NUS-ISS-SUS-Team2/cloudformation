@@ -21,7 +21,7 @@ Resources:
       DBInstanceIdentifier: "securidine-backend-db"
       Engine: "mysql"  # Change to "postgres" if using PostgreSQL
       MasterUsername: "admin"
-      MasterUserPassword: "YourSecurePassword123"  # Replace with Secrets Manager for security
+      MasterUserPassword: "pass1234"  # Replace with Secrets Manager for security
       DBInstanceClass: "db.t3.micro"  # Free-tier eligible
       AllocatedStorage: 20  # Minimum storage (20GB)
       PubliclyAccessible: false  # Change to true if you need external access
@@ -31,8 +31,7 @@ Resources:
       VPCSecurityGroups:
         - !Ref MyDBSecurityGroup
       DBSubnetGroupName: !Ref MyDBSubnetGroup
-      DeletionProtection: false   # Ensure deletion is allowed
-      SkipFinalSnapshot: true     # Prevents a final snapshot (avoiding storage costs)
+
   MyDBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -54,4 +53,4 @@ Resources:
 Outputs:
   DBInstanceEndpoint:
     Description: "The connection endpoint for the RDS instance"
-    Value: !GetAtt MyDBInstance.Endpoint.Address
+    Value: !GetAtt MyRDSInstance.Endpoint.Address

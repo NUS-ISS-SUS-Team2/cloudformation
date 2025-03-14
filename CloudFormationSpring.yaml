@@ -86,6 +86,11 @@ Resources:
           echo "Verifying Docker and CodeDeploy installations..."
           docker --version || exit 1
           systemctl status codedeploy-agent || exit 1
+          
+          echo "Installation for Mysql..."
+          dnf update -y
+          dnf install -y mariadb105
+
 
           echo "User Data script completed."
 
@@ -103,6 +108,10 @@ Resources:
           FromPort: 8080
           ToPort: 8080
           CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0  # Allows HTTPS access from anywhere
 
   EC2InstanceRole:
     Type: "AWS::IAM::Role"
@@ -257,6 +266,7 @@ Resources:
         Type: NO_ARTIFACTS
       TimeoutInMinutes: 15
 
+
   CodePipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
@@ -279,8 +289,10 @@ Resources:
                 Repo: !Ref GitHubRepo
                 Branch: !Ref GitHubBranch
                 OAuthToken: !Sub "{{resolve:secretsmanager:GitHubTokenBZ:SecretString:GitHubOAuthToken}}"
+                PollForSourceChanges: false  
               OutputArtifacts:
                 - Name: SourceArtifact
+                
 
         - Name: Build
           Actions:
