@@ -24,7 +24,12 @@ Parameters:
     Default: "t2.micro"
   SSLCertificateArn:
     Type: String
-    Description: "Copy the ARN of the existing ACM certificate for HTTPS [arn:aws:acm:ap-southeast-1:302125150179:certificate/827f2781-1eac-43e0-9162-ff9585564255]"
+    Default: "arn:aws:acm:ap-southeast-1:302125150179:certificate/827f2781-1eac-43e0-9162-ff9585564255"
+    Description: "Copy the ARN of the existing ACM certificate for HTTPS arn:aws:acm:ap-southeast-1:302125150179:certificate/827f2781-1eac-43e0-9162-ff9585564255"
+  APIDomainName:
+    Type: String
+    Default: "nusiss-sus-project.online"
+    Description: "API domain name for API Gateway (Need to match with domain registered for cert for HTTPS)"
   KeyName:
     Description: "EC2 KeyPair for SSH access"
     Type: AWS::EC2::KeyPair::KeyName
@@ -177,19 +182,41 @@ Resources:
     Properties:
       Name: "OrderServiceAPI"
       Description: "API for Order Service"
-  
+      
+  OrderServiceApiDomainName:
+    Type: AWS::ApiGateway::DomainName
+    Properties:
+      DomainName: !Ref APIDomainName
+      RegionalCertificateArn: !Ref SSLCertificateArn
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  OrderServiceApiBasePathMapping:
+    Type: AWS::ApiGateway::BasePathMapping
+    Properties:
+      DomainName: !Ref OrderServiceApiDomainName
+      RestApiId: !Ref OrderServiceApi
+
   OrderResource:
     Type: AWS::ApiGateway::Resource
     Properties:
       RestApiId: !Ref OrderServiceApi
       ParentId: !GetAtt OrderServiceApi.RootResourceId
-      PathPart: "orders"
+      PathPart: "order"
+
+  GetAllOrdersResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref OrderServiceApi
+      ParentId: !Ref OrderResource
+      PathPart: "getAllOrders"
 
   GetOrdersMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref OrderServiceApi
-      ResourceId: !Ref OrderResource
+      ResourceId: !Ref GetAllOrdersResource
       HttpMethod: GET
       AuthorizationType: NONE
       Integration:
@@ -200,15 +227,17 @@ Resources:
           - StatusCode: "200"
       MethodResponses:
         - StatusCode: "200"
-
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET, POST, OPTIONS'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+            
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn: 
       - GetOrdersMethod
     Properties:
       RestApiId: !Ref OrderServiceApi
-      StageName: prod      
-        
         
   ECRRepository:
     Type: AWS::ECR::Repository
