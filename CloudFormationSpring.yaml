@@ -42,6 +42,20 @@ Parameters:
   SubnetALB:
     Description: "Second Subnet IDs for ALB (Requires more than one - Choose a different one)"
     Type: AWS::EC2::Subnet::Id
+  SonarCloudOrganization:
+    Type: String
+    Default: "nus-iss-sus-team2"
+  SonarCloudProjectKey:
+    Type: String
+    Default: "NUS-ISS-SUS-Team2_securidine-backend"
+  SonarCloudToken:
+    NoEcho: true
+    Type: String
+    Default: "85600fd8d7f394aa0e6f1188b832be4b34fba240"
+  AWSDefaultRegion:
+    Type: String
+    Default: "ap-southeast-1"
+
 
 Resources:
   OrderServiceEC2Instance:
@@ -95,8 +109,7 @@ Resources:
           echo "Installation for Mysql..."
           dnf update -y
           dnf install -y mariadb105
-
-
+          
           echo "User Data script completed."
 
   EC2SecurityGroup:
@@ -251,6 +264,25 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
 
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: "*"
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AdminAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: "*"
+                Resource: "*"
+
   CodePipelineRole:
     Type: AWS::IAM::Role
     Properties:
@@ -274,6 +306,7 @@ Resources:
     Type: AWS::CodeBuild::Project
     Properties:
       Name: SpringBootDockerBuild
+      ServiceRole: !GetAtt CodeBuildRole.Arn
       Source:
         Type: GITHUB
         Location: !Sub "https://github.com/${GitHubOwner}/${GitHubRepo}.git"
@@ -285,12 +318,17 @@ Resources:
         PrivilegedMode: true
         EnvironmentVariables:
           - Name: AWS_DEFAULT_REGION
-            Value: !Ref AWS::Region
+            Value: !Ref AWSDefaultRegion
           - Name: REPOSITORY_URI
             Value: !Sub "${ECRRepository.RepositoryUri}"
           - Name: JAVA_HOME
             Value: "/usr/lib/jvm/java-17-openjdk"
-      ServiceRole: !GetAtt CodePipelineRole.Arn
+          - Name: SONAR_TOKEN
+            Value: !Ref SonarCloudToken
+          - Name: SONAR_ORG
+            Value: !Ref SonarCloudOrganization
+          - Name: SONAR_PROJECT_KEY
+            Value: !Ref SonarCloudProjectKey
       Artifacts:
         Type: NO_ARTIFACTS
       TimeoutInMinutes: 15
@@ -321,11 +359,10 @@ Resources:
                 PollForSourceChanges: false  
               OutputArtifacts:
                 - Name: SourceArtifact
-                
 
-        - Name: Build
+        - Name: BuildDockerWithSonar
           Actions:
-            - Name: BuildDockerImage
+            - Name: BuildDockerAndScan
               ActionTypeId:
                 Category: Build
                 Owner: AWS
