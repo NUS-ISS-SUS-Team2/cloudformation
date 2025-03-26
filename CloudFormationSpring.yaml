@@ -58,6 +58,18 @@ Parameters:
 
 
 Resources:
+  ECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref ECRRepositoryName
+
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: securidines3bucket
+      VersioningConfiguration:
+        Status: Enabled
+
   OrderServiceEC2Instance:
     Type: "AWS::EC2::Instance"
     Properties:
@@ -252,18 +264,6 @@ Resources:
     Properties:
       RestApiId: !Ref OrderServiceApi
         
-  ECRRepository:
-    Type: AWS::ECR::Repository
-    Properties:
-      RepositoryName: !Ref ECRRepositoryName
-
-  ArtifactBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: securidines3bucket
-      VersioningConfiguration:
-        Status: Enabled
-
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
@@ -333,7 +333,6 @@ Resources:
         Type: NO_ARTIFACTS
       TimeoutInMinutes: 15
 
-
   CodePipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
@@ -388,6 +387,22 @@ Resources:
                 DeploymentGroupName: SpringBootDeploymentGroup
               InputArtifacts:
                 - Name: BuildOutput
+                
+        - Name: SecurityScan
+          Actions:
+            - Name: RunOWASPZAP
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              InputArtifacts:
+                - Name: BuildOutput
+              OutputArtifacts:
+                - Name: OWASPZAPReport
+              Configuration:
+                ProjectName: !Ref CodeBuildSecurityScan
+              RunOrder: 1
 
   CodeDeployApplication:
     Type: AWS::CodeDeploy::Application
@@ -408,7 +423,27 @@ Resources:
         Enabled: true
         Events:
           - DEPLOYMENT_FAILURE
-
+          
+  CodeBuildSecurityScan:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SecurityScan
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: Order-Service/buildspec-security.yml
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: "aws/codebuild/amazonlinux2-x86_64-standard:4.0"
+        Type: LINUX_CONTAINER
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: API_URL
+            Value: !Sub "https://${OrderServiceApi}.execute-api.${AWS::Region}.amazonaws.com/prod/order/getAllOrders"
+      ServiceRole: !GetAtt CodePipelineRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      TimeoutInMinutes: 10
+      
 Outputs:
   PipelineName:
     Description: Name of the AWS CodePipeline
