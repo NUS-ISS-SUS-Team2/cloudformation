@@ -24,12 +24,20 @@ Parameters:
     Default: "t2.micro"
   SSLCertificateArn:
     Type: String
-    Default: "arn:aws:acm:ap-southeast-1:302125150179:certificate/827f2781-1eac-43e0-9162-ff9585564255"
-    Description: "Copy the ARN of the existing ACM certificate for HTTPS arn:aws:acm:ap-southeast-1:302125150179:certificate/827f2781-1eac-43e0-9162-ff9585564255"
+    Default: "arn:aws:acm:ap-southeast-1:302125150179:certificate/a4de7299-0b11-4859-8bea-32f2a72ece6a"
+    Description: "Copy the ARN of the existing ACM certificate for HTTPS (use subdomain cert)"
+  HostedZoneId:
+    Type: String
+    Default: "Z01998683DGB4NDJAP1XC"
+    Description: Hosted Zone Id
   APIDomainName:
     Type: String
-    Default: "nusiss-sus-project.online"
-    Description: "API domain name for API Gateway (Need to match with domain registered for cert for HTTPS)"
+    Default: "api.nusiss-sus-project.online"
+    Description: "API domain name for API Gateway (Need to match with wildcard domain registered for cert for HTTPS)" 
+  ALBDomainName:
+    Type: String
+    Default: "alb.nusiss-sus-project.online"
+    Description: "ALB domain name for ALB HTTPS (Need to match with wildcard domain registered for cert for HTTPS)"
   KeyName:
     Description: "EC2 KeyPair for SSH access"
     Type: AWS::EC2::KeyPair::KeyName
@@ -207,7 +215,14 @@ Resources:
     Properties:
       Name: "OrderServiceAPI"
       Description: "API for Order Service"
-      
+      Policy:
+        Statement:
+          - Action: "execute-api:Invoke"
+            Effect: "Allow"
+            Principal: "*"
+            Resource: "execute-api/*"
+
+ 
   OrderServiceApiDomainName:
     Type: AWS::ApiGateway::DomainName
     Properties:
@@ -247,9 +262,13 @@ Resources:
       Integration:
         Type: HTTP
         IntegrationHttpMethod: GET
-        Uri: !Join ["", ["https://", !GetAtt OrderServiceALB.DNSName, "/order/getAllOrders"]]
+        Uri: !Join ["", ["https://", !Ref ALBDomainName, "/order/getAllOrders"]]
         IntegrationResponses:
           - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'GET, POST, OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
       MethodResponses:
         - StatusCode: "200"
           ResponseParameters:
@@ -263,6 +282,16 @@ Resources:
       - GetOrdersMethod
     Properties:
       RestApiId: !Ref OrderServiceApi
+      
+  ApiGatewayDeploymentStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref OrderServiceApi
+      DeploymentId: !Ref ApiDeployment
+      StageName: prod
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
         
   CodeBuildRole:
     Type: AWS::IAM::Role
@@ -439,10 +468,32 @@ Resources:
         EnvironmentVariables:
           - Name: API_URL
             Value: !Sub "https://${OrderServiceApi}.execute-api.${AWS::Region}.amazonaws.com/prod/order/getAllOrders"
+          - Name: REPORT_BUCKET
+            Value: !Ref ArtifactBucket
       ServiceRole: !GetAtt CodePipelineRole.Arn
       Artifacts:
         Type: CODEPIPELINE
       TimeoutInMinutes: 10
+     
+  APIGatewayDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId 
+      Name: !Ref APIDomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt OrderServiceApiDomainName.RegionalDomainName
+        HostedZoneId: !GetAtt OrderServiceApiDomainName.RegionalHostedZoneId     
+     
+  ApiGatewayToALBRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref ALBDomainName
+      Type: A
+      AliasTarget:
+        HostedZoneId: !GetAtt OrderServiceALB.CanonicalHostedZoneID
+        DNSName: !GetAtt OrderServiceALB.DNSName
       
 Outputs:
   PipelineName:
