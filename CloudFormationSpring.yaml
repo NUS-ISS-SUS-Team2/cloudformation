@@ -220,7 +220,7 @@ Resources:
           - Action: "execute-api:Invoke"
             Effect: "Allow"
             Principal: "*"
-            Resource: "execute-api/*"
+            Resource: "arn:aws:execute-api:*"
 
  
   OrderServiceApiDomainName:
