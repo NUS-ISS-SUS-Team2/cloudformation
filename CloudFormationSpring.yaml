@@ -108,6 +108,12 @@ Resources:
       LogGroupName: "/aws/codepipeline/logs"
       RetentionInDays: 1
 
+  OrderServiceWAFLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: "aws-waf-logs-OrderService"
+      RetentionInDays: 1
+
   OrderServiceEC2Instance:
     Type: "AWS::EC2::Instance"
     Properties:
@@ -508,6 +514,37 @@ Resources:
       Artifacts:
         Type: CODEPIPELINE
       TimeoutInMinutes: 10
+
+  OrderServiceWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: OrderServiceWebACL
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}  # allow traffic here
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: OrderServiceWebACL
+      Rules: []  # filtering here
+
+
+  OrderServiceWebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Sub "arn:aws:apigateway:${AWS::Region}::/restapis/${OrderServiceApi}/stages/prod"
+      WebACLArn: !GetAtt OrderServiceWebACL.Arn
+
+  OrderServiceWAFLogging:
+    Type: AWS::WAFv2::LoggingConfiguration
+    DependsOn: 
+      - OrderServiceWAFLogGroup
+      - OrderServiceWebACL
+    Properties:
+      LogDestinationConfigs:
+        - !GetAtt OrderServiceWAFLogGroup.Arn
+      ResourceArn: !GetAtt OrderServiceWebACL.Arn
+
 
   CloudWatchLogRole:
     Type: AWS::IAM::Role
