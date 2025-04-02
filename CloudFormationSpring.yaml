@@ -78,6 +78,36 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
 
+  APIGatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/api-gateway/${AWS::StackName}"
+      RetentionInDays: 1
+
+  EC2LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: "/aws/ec2/logs"
+      RetentionInDays: 1
+
+  ALBLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: "/aws/alb/logs"
+      RetentionInDays: 1
+
+  CodeDeployLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: "/aws/codedeploy/logs"
+      RetentionInDays: 1
+
+  CodePipelineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: "/aws/codepipeline/logs"
+      RetentionInDays: 1
+
   OrderServiceEC2Instance:
     Type: "AWS::EC2::Instance"
     Properties:
@@ -288,10 +318,14 @@ Resources:
     Properties:
       RestApiId: !Ref OrderServiceApi
       DeploymentId: !Ref ApiDeployment
+      AccessLogSetting:
+        DestinationArn: !GetAtt APIGatewayLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","user":"$context.identity.user","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"}'
       StageName: prod
       MethodSettings:
         - ResourcePath: "/*"
           HttpMethod: "*"
+        
         
   CodeBuildRole:
     Type: AWS::IAM::Role
@@ -474,6 +508,33 @@ Resources:
       Artifacts:
         Type: CODEPIPELINE
       TimeoutInMinutes: 10
+
+  CloudWatchLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CloudWatchLoggingRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - apigateway.amazonaws.com
+                - codedeploy.amazonaws.com
+                - codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLoggingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
      
   APIGatewayDNSRecord:
     Type: AWS::Route53::RecordSet
