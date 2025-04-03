@@ -526,11 +526,15 @@ Resources:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
         MetricName: OrderServiceWebACL
-      Rules: []  # filtering here
+      Rules: [] # filter rules here
 
 
   OrderServiceWebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
+    DependsOn: 
+      - OrderServiceWebACL
+      - OrderServiceApi
+      - ApiGatewayDeploymentStage 
     Properties:
       ResourceArn: !Sub "arn:aws:apigateway:${AWS::Region}::/restapis/${OrderServiceApi}/stages/prod"
       WebACLArn: !GetAtt OrderServiceWebACL.Arn
