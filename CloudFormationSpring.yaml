@@ -312,10 +312,90 @@ Resources:
             method.response.header.Access-Control-Allow-Methods: "'GET, POST, OPTIONS'"
             method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
             
+  MenuResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref OrderServiceApi
+      ParentId: !GetAtt OrderServiceApi.RootResourceId
+      PathPart: "menu"
+
+  GetAllMenuItemsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref OrderServiceApi
+      ParentId: !Ref MenuResource
+      PathPart: "getAllMenuItems"
+
+  GetMenuItemsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref OrderServiceApi
+      ResourceId: !Ref GetAllMenuItemsResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: HTTP
+        IntegrationHttpMethod: GET
+        Uri: !Join ["", ["https://", !Ref ALBDomainName, "/menu/getAllMenuItems"]]
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'GET, POST, OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET, POST, OPTIONS'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+
+            
+  RestaurantResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref OrderServiceApi
+      ParentId: !GetAtt OrderServiceApi.RootResourceId
+      PathPart: "restaurant"
+
+  GetAllRestaurantsFromRestaurantResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref OrderServiceApi
+      ParentId: !Ref RestaurantResource
+      PathPart: "getAllRestaurants"
+
+  GetRestaurantRestaurantsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref OrderServiceApi
+      ResourceId: !Ref GetAllRestaurantsFromRestaurantResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: HTTP
+        IntegrationHttpMethod: GET
+        Uri: !Join ["", ["https://", !Ref ALBDomainName, "/restaurant/getAllRestaurants"]]
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'GET, POST, OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+            method.response.header.Access-Control-Allow-Methods: "'GET, POST, OPTIONS'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+
+            
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn: 
       - GetOrdersMethod
+      - GetMenuItemsMethod
+      - GetRestaurantRestaurantsMethod
     Properties:
       RestApiId: !Ref OrderServiceApi
       
