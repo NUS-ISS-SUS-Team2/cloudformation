@@ -114,6 +114,12 @@ Resources:
       LogGroupName: "aws-waf-logs-OrderService"
       RetentionInDays: 1
 
+  MyLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/ValidateJWTFunction"
+      RetentionInDays: 1
+
   OrderServiceEC2Instance:
     Type: "AWS::EC2::Instance"
     Properties:
@@ -246,6 +252,69 @@ Resources:
       Targets:
         - Id: !Ref OrderServiceEC2Instance
         
+  TokenValidationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ValidateJWTFunction
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: jwtauthlambdabucket
+        S3Key: jwt-authorizer.zip
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LambdaJWTVRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: LambdaBasicExecution
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  CustomLambdaAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      Name: JWTValidator
+      Type: TOKEN
+      AuthorizerUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TokenValidationFunction.Arn}/invocations
+      IdentitySource: method.request.header.Authorization
+      RestApiId: !Ref OrderServiceApi
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt TokenValidationFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${OrderServiceApi}/*
+        
+        
+  OrderServiceCognitoAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      Name: OrderServiceCognitoAuthorizer
+      Type: COGNITO_USER_POOLS
+      IdentitySource: method.request.header.Authorization
+      RestApiId: !Ref OrderServiceApi
+      ProviderARNs:
+        - 'arn:aws:cognito-idp:ap-southeast-1:613133681863:userpool/ap-southeast-1_LdW6E3byz'
+        
   OrderServiceApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
@@ -328,11 +397,13 @@ Resources:
 
   GetMenuItemsMethod:
     Type: AWS::ApiGateway::Method
+    DependsOn: OrderServiceCognitoAuthorizer
     Properties:
       RestApiId: !Ref OrderServiceApi
       ResourceId: !Ref GetAllMenuItemsResource
       HttpMethod: GET
-      AuthorizationType: NONE
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref OrderServiceCognitoAuthorizer
       Integration:
         Type: HTTP
         IntegrationHttpMethod: GET
@@ -342,13 +413,13 @@ Resources:
             ResponseParameters:
               method.response.header.Access-Control-Allow-Origin: "'*'"
               method.response.header.Access-Control-Allow-Methods: "'GET, POST, OPTIONS'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
       MethodResponses:
         - StatusCode: "200"
           ResponseParameters:
             method.response.header.Access-Control-Allow-Origin: "'*'"
             method.response.header.Access-Control-Allow-Methods: "'GET, POST, OPTIONS'"
-            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
 
             
   RestaurantResource:
@@ -367,11 +438,13 @@ Resources:
 
   GetRestaurantRestaurantsMethod:
     Type: AWS::ApiGateway::Method
+    DependsOn: CustomLambdaAuthorizer
     Properties:
       RestApiId: !Ref OrderServiceApi
       ResourceId: !Ref GetAllRestaurantsFromRestaurantResource
       HttpMethod: GET
-      AuthorizationType: NONE
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref CustomLambdaAuthorizer
       Integration:
         Type: HTTP
         IntegrationHttpMethod: GET
@@ -381,15 +454,48 @@ Resources:
             ResponseParameters:
               method.response.header.Access-Control-Allow-Origin: "'*'"
               method.response.header.Access-Control-Allow-Methods: "'GET, POST, OPTIONS'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+          - StatusCode: "500"
+            SelectionPattern: ".*"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'GET, POST, OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+          - StatusCode: "400"
+            SelectionPattern: "4\\d{2}"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'GET, POST, OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+
+          - StatusCode: "403"
+            SelectionPattern: "403"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'GET, POST, OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
       MethodResponses:
         - StatusCode: "200"
           ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: "'*'"
-            method.response.header.Access-Control-Allow-Methods: "'GET, POST, OPTIONS'"
-            method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
-
-            
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+        - StatusCode: "500"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+        - StatusCode: "400"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+        - StatusCode: "403"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+                
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn: 
